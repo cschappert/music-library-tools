@@ -103,15 +103,15 @@ def ensure_baseline_jpeg(image_path: Path) -> Path:
 
 
 def embed_cover(flac_path: Path, cover_path: Path) -> bool:
-    """Embed cover.jpg into a FLAC file as baseline JPEG."""
-    baseline_cover: Path = ensure_baseline_jpeg(cover_path)
-    temp_created: bool = baseline_cover != cover_path
+    """Embed a cover image into a FLAC file.
 
+    Note: cover_path should already be a baseline JPEG.
+    """
     try:
         subprocess.run(
             [
                 "metaflac",
-                "--import-picture-from=" + str(baseline_cover),
+                "--import-picture-from=" + str(cover_path),
                 str(flac_path),
             ],
             check=True,
@@ -121,10 +121,6 @@ def embed_cover(flac_path: Path, cover_path: Path) -> bool:
     except subprocess.CalledProcessError as e:
         print(f"Error embedding cover in {flac_path}: {e}")
         return False
-    finally:
-        # Clean up temp file if created
-        if temp_created and baseline_cover.exists():
-            baseline_cover.unlink()
 
 
 def process_album_directory(album_dir: Path, log_file: TextIO) -> None:
@@ -170,13 +166,23 @@ def process_album_directory(album_dir: Path, log_file: TextIO) -> None:
 
     if cover_path:
         print(f"  Found cover: {cover_path.name}")
-        print(f"  Embedding art in {len(flacs_without_art)} file(s)...")
-        for flac in flacs_without_art:
-            if embed_cover(flac, cover_path):
-                print(f"    ✓ {flac.name}")
-            else:
-                print(f"    ✗ Failed: {flac.name}")
-                log_file.write(f"{flac}\n")
+
+        # Convert to baseline JPEG once for the entire directory
+        baseline_cover: Path = ensure_baseline_jpeg(cover_path)
+        temp_created: bool = baseline_cover != cover_path
+
+        try:
+            print(f"  Embedding art in {len(flacs_without_art)} file(s)...")
+            for flac in flacs_without_art:
+                if embed_cover(flac, baseline_cover):
+                    print(f"    ✓ {flac.name}")
+                else:
+                    print(f"    ✗ Failed: {flac.name}")
+                    log_file.write(f"{flac}\n")
+        finally:
+            # Clean up temp file if created
+            if temp_created and baseline_cover.exists():
+                baseline_cover.unlink()
     else:
         print(f"  ✗ No cover image found - logging {len(flacs_without_art)} file(s)")
         for flac in flacs_without_art:
