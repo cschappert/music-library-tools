@@ -97,6 +97,7 @@ def ensure_baseline_jpeg(image_path: Path) -> Path:
             return Path(temp_path)
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"Warning: Could not check/convert {image_path}: {e}")
+        return image_path
 
     return image_path
 
@@ -186,7 +187,8 @@ def main() -> None:
     music_dir: Path = Path(".")
     log_path: Path = Path("missing_album_art.log")
 
-    print(f"Scanning for FLAC files in: {music_dir.absolute()}")
+    print()
+    print(f"Scanning recursively for FLAC files in: {music_dir.absolute()}")
     print(f"Log file: {log_path.absolute()}\n")
 
     # Find all directories that contain FLAC files
@@ -205,7 +207,7 @@ def main() -> None:
         for album_dir in sorted(album_dirs):
             process_album_directory(album_dir, log_file)
 
-    print(f"\n✓ Done! Check {log_path} for FLACs that need manual attention.")
+    print(f"\n✓ Done! Check {log_path} for FLACs that need manual attention.\n")
 
 
 if __name__ == "__main__":
