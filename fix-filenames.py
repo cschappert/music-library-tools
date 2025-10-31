@@ -176,6 +176,16 @@ def rename_album_directory(album_dir: Path, dry_run: bool = False) -> bool:
     Returns:
         True if renamed (or would be renamed in dry_run), False otherwise
     """
+    # For now: skip directories that contain "disc" followed by a number (e.g., "Disc 1", "Live in Paris (Disc 2)")
+    # TODO: rather than just skipping directories that seem to represent one disc of a multi-disk album, it may
+    # be better to include the disc number in the new dir name when total discs > 1
+    #
+    # I'm not sure if I want to consolidate all of the discs in a multi-disk album under one folder because it doesn't really
+    # make sense if the album was ripped and each directory has its own log and cue file.
+    if re.search(r"disc\s+\d+", album_dir.name, re.IGNORECASE):
+        print(f"  → Skipping disc directory: {album_dir.name}")
+        return False
+
     metadata = get_album_metadata_from_directory(album_dir)
 
     if "year" not in metadata or "album" not in metadata:
