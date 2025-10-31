@@ -88,6 +88,9 @@ def sanitize_filename(name: str) -> str:
     # Clean up multiple spaces and trim
     name = re.sub(r"\s+", " ", name).strip()
 
+    # Remove leading dots (creates hidden files on Unix/Linux)
+    name = name.lstrip(".")
+
     # Remove trailing period if present (problematic on Windows)
     if name.endswith("."):
         name = name.rstrip(".")
