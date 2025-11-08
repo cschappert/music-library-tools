@@ -28,6 +28,57 @@ def extract_embedded_art(flac_path: Path, output_path: Path) -> bool:
         return False
 
 
+def get_image_dimensions(image_path: Path) -> tuple[int, int] | None:
+    """Get the dimensions of an image file.
+
+    Args:
+        image_path: Path to the image file
+
+    Returns:
+        Tuple of (width, height) in pixels, or None if unable to determine
+    """
+    try:
+        result = subprocess.run(
+            ["identify", "-format", "%w %h", str(image_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        width, height = result.stdout.strip().split()
+        return (int(width), int(height))
+    except (subprocess.CalledProcessError, ValueError) as e:
+        print(f"Warning: Could not get dimensions of {image_path}: {e}", file=sys.stderr)
+        return None
+
+
+def is_baseline_jpeg(image_path: Path) -> bool:
+    """Check if an image is a baseline JPEG (not progressive).
+
+    Args:
+        image_path: Path to the image file
+
+    Returns:
+        True if it's a baseline JPEG, False if progressive or can't determine
+    """
+    try:
+        result = subprocess.run(
+            ["identify", "-verbose", str(image_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # If "Interlace: None", it's baseline. If "Interlace: JPEG" or "Interlace: Line", it's progressive
+        if "Interlace: None" in result.stdout:
+            return True
+        elif "Interlace: JPEG" in result.stdout or "Interlace: Line" in result.stdout:
+            return False
+        # If we can't determine, assume it needs processing
+        return False
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: Could not check interlacing of {image_path}: {e}", file=sys.stderr)
+        return False
+
+
 def resize_to_baseline_jpeg(
     input_path: Path, output_path: Path, size: int = 150
 ) -> bool:
@@ -143,14 +194,33 @@ def process_album_directory(
             print(f"  → No embedded art found, skipping album")
             return (0, len(flac_files), 0)
 
+        # Check dimensions of extracted art
+        dimensions = get_image_dimensions(extracted_path)
+        if dimensions:
+            width, height = dimensions
+            max_dim = max(width, height)
+
+            # If already 150x150 or smaller, check if it's baseline JPEG
+            if max_dim <= 150:
+                is_baseline = is_baseline_jpeg(extracted_path)
+                if is_baseline:
+                    print(f"  → Art is already {width}x{height} baseline JPEG, skipping album")
+                    return (0, len(flac_files), 0)
+                else:
+                    print(f"  → Art is {width}x{height} but progressive, will convert to baseline")
+            else:
+                print(f"  → Art is {width}x{height}, will resize to 150x150")
+        else:
+            print(f"  → Could not determine art dimensions, will process anyway")
+
         if dry_run:
             print(
                 f"  [DRY RUN] Would resize and re-embed art in {len(flac_files)} file(s)"
             )
             return (len(flac_files), 0, 0)
 
-        # Resize to 120x120 baseline JPEG once for the whole album
-        if not resize_to_baseline_jpeg(extracted_path, resized_path, size=120):
+        # Resize to 150x150 baseline JPEG once for the whole album
+        if not resize_to_baseline_jpeg(extracted_path, resized_path, size=150):
             print(f"  ✗ Failed to resize art")
             return (0, 0, len(flac_files))
 
