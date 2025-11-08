@@ -80,7 +80,7 @@ def is_baseline_jpeg(image_path: Path) -> bool:
 
 
 def resize_to_baseline_jpeg(
-    input_path: Path, output_path: Path, size: int = 150
+    input_path: Path, output_path: Path, size: int = 300
 ) -> bool:
     """Resize image to baseline JPEG with specified dimensions.
 
@@ -100,7 +100,7 @@ def resize_to_baseline_jpeg(
                 "-resize",
                 f"{size}x{size}",
                 "-quality",
-                "85",
+                "90",
                 "-interlace",
                 "none",
                 str(output_path),
@@ -200,8 +200,8 @@ def process_album_directory(
             width, height = dimensions
             max_dim = max(width, height)
 
-            # If already 150x150 or smaller, check if it's baseline JPEG
-            if max_dim <= 150:
+            # If already 300x300 or smaller, check if it's baseline JPEG
+            if max_dim <= 300:
                 is_baseline = is_baseline_jpeg(extracted_path)
                 if is_baseline:
                     print(f"  → Art is already {width}x{height} baseline JPEG, skipping album")
@@ -209,7 +209,7 @@ def process_album_directory(
                 else:
                     print(f"  → Art is {width}x{height} but progressive, will convert to baseline")
             else:
-                print(f"  → Art is {width}x{height}, will resize to 150x150")
+                print(f"  → Art is {width}x{height}, will resize to 300x300")
         else:
             print(f"  → Could not determine art dimensions, will process anyway")
 
@@ -219,8 +219,8 @@ def process_album_directory(
             )
             return (len(flac_files), 0, 0)
 
-        # Resize to 150x150 baseline JPEG once for the whole album
-        if not resize_to_baseline_jpeg(extracted_path, resized_path, size=150):
+        # Resize to 300x300 baseline JPEG once for the whole album
+        if not resize_to_baseline_jpeg(extracted_path, resized_path, size=300):
             print(f"  ✗ Failed to resize art")
             return (0, 0, len(flac_files))
 
@@ -245,7 +245,7 @@ def process_album_directory(
             processed += 1
 
         if processed > 0:
-            print(f"  ✓ Resized and re-embedded art (150x150) in {processed} file(s)")
+            print(f"  ✓ Resized and re-embedded art (300x300) in {processed} file(s)")
 
         return (processed, 0, errors)
 
@@ -266,7 +266,7 @@ def main() -> None:
     music_dir: Path = Path.cwd()
 
     print(f"\nScanning for FLAC files in: {music_dir}")
-    print(f"Target art size: 150x150 baseline JPEG\n")
+    print(f"Target art size: 300x300 baseline JPEG\n")
 
     # Find all FLAC files (case-insensitive)
     flac_files: list[Path] = []
