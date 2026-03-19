@@ -5,6 +5,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Maximum size in pixels for the long dimension of embedded art
+MAX_ART_SIZE = 700
+
 
 def extract_embedded_art(flac_path: Path, output_path: Path) -> bool:
     """Extract embedded art from a FLAC file.
@@ -205,8 +208,8 @@ def process_album_directory(
             width, height = dimensions
             max_dim = max(width, height)
 
-            # If already 700x700 or smaller, check if it's baseline JPEG
-            if max_dim <= 700:
+            # If already within MAX_ART_SIZE or smaller, check if it's baseline JPEG
+            if max_dim <= MAX_ART_SIZE:
                 is_baseline = is_baseline_jpeg(extracted_path)
                 if is_baseline:
                     print(
@@ -218,7 +221,7 @@ def process_album_directory(
                         f"  → Art is {width}x{height} but progressive, will convert to baseline"
                     )
             else:
-                print(f"  → Art is {width}x{height}, will resize to 700x700")
+                print(f"  → Art is {width}x{height}, will resize to {MAX_ART_SIZE}px (long dimension)")
         else:
             print(f"  → Could not determine art dimensions, will process anyway")
 
@@ -228,8 +231,8 @@ def process_album_directory(
             )
             return (len(flac_files), 0, 0)
 
-        # Resize to 700x700 baseline JPEG once for the whole album
-        if not resize_to_baseline_jpeg(extracted_path, resized_path, size=700):
+        # Resize to MAX_ART_SIZE baseline JPEG once for the whole album
+        if not resize_to_baseline_jpeg(extracted_path, resized_path, size=MAX_ART_SIZE):
             print(f"  ✗ Failed to resize art")
             return (0, 0, len(flac_files))
 
@@ -254,7 +257,7 @@ def process_album_directory(
             processed += 1
 
         if processed > 0:
-            print(f"  ✓ Resized and re-embedded art (700x700) in {processed} file(s)")
+            print(f"  ✓ Resized and re-embedded art ({MAX_ART_SIZE}px long dimension) in {processed} file(s)")
 
         return (processed, 0, errors)
 
@@ -275,7 +278,7 @@ def main() -> None:
     music_dir: Path = Path.cwd()
 
     print(f"\nScanning for FLAC files in: {music_dir}")
-    print(f"Target art size: 700x700 baseline JPEG\n")
+    print(f"Target art size: {MAX_ART_SIZE}px (long dimension) baseline JPEG\n")
 
     # Find all FLAC files (case-insensitive)
     flac_files: list[Path] = []
