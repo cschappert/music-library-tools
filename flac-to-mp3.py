@@ -1,32 +1,57 @@
 #!/usr/bin/env python3
+import argparse
 import subprocess
 import sys
 from pathlib import Path
 
 
-def convert_flac_to_mp3(flac_path: Path, output_base: Path) -> bool:
+def has_embedded_art(flac_path: Path) -> bool:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "csv=p=0",
+            str(flac_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() != ""
+
+
+def convert_flac_to_mp3(
+    flac_path: Path, music_dir: Path, output_base: Path
+) -> bool | None:
     """Convert a FLAC file to MP3 with specific quality settings.
 
     Args:
         flac_path: Path to the source FLAC file
+        music_dir: Base directory of the source FLAC library
         output_base: Base directory for converted files
 
     Returns:
-        True if conversion succeeded, False otherwise
+        True if conversion succeeded, False if it failed, None if skipped
     """
-    # Get relative path from current directory
-    try:
-        relative_path: Path = flac_path.relative_to(Path.cwd())
-    except ValueError:
-        # If file is not relative to cwd, use absolute path
-        relative_path = flac_path
+    relative_path: Path = flac_path.relative_to(music_dir)
+
+    # Create output file path with .mp3 extension
+    output_file: Path = output_base / relative_path.with_suffix(".mp3")
+
+    if (
+        output_file.exists()
+        and output_file.stat().st_mtime >= flac_path.stat().st_mtime
+    ):
+        return None
 
     # Create output directory structure
     output_dir: Path = output_base / relative_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Create output file path with .mp3 extension
-    output_file: Path = output_base / relative_path.with_suffix(".mp3")
 
     # FFmpeg command
     ffmpeg_cmd: list[str] = [
@@ -51,18 +76,23 @@ def convert_flac_to_mp3(flac_path: Path, output_base: Path) -> bool:
         # Use ID3v2.3 tags
         "-id3v2_version",
         "3",
-        # Scale embedded artwork to max 320px (preserving aspect ratio)
-        # NOTE: May fail if flac file lacks embedded art (still need to test)
-        "-vf",
-        "scale='if(gt(iw,ih),320,-1)':'if(gt(ih,iw),320,-1)'",
-        # Encode artwork as MJPEG with quality 3 (higher quality)
-        "-c:v",
-        "mjpeg",
-        "-q:v",
-        "3",
-        # Output file
-        str(output_file),
     ]
+
+    if has_embedded_art(flac_path):
+        ffmpeg_cmd += [
+            "-vf",
+            # Scale down to max 700px on the longest side; never upscale
+            "scale='if(gte(iw,ih),min(700,iw),-1)':'if(gt(ih,iw),min(700,ih),-1)'",
+            "-c:v",
+            "mjpeg",
+            "-q:v",
+            "3",
+        ]
+    else:
+        ffmpeg_cmd += ["-vn"]
+
+    # Add the output file path to the end of the ffmpeg command
+    ffmpeg_cmd.append(str(output_file))
 
     try:
         subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
@@ -72,12 +102,41 @@ def convert_flac_to_mp3(flac_path: Path, output_base: Path) -> bool:
         return False
 
 
+def remove_orphaned_mp3s(music_dir: Path, output_base: Path) -> None:
+    """Remove MP3s in output_base that have no corresponding FLAC in music_dir."""
+    print(f"\nScanning for orphaned MP3s in: {output_base}")
+
+    removed: int = 0
+
+    for mp3_file in output_base.rglob("*.mp3"):
+        relative_path: Path = mp3_file.relative_to(output_base)
+
+        # Check all case variants
+        if not any(
+            (music_dir / relative_path.with_suffix(ext)).exists()
+            for ext in [".flac", ".FLAC", ".Flac"]
+        ):
+            print(f"  Removing orphan: {relative_path}")
+            mp3_file.unlink()
+            removed += 1
+
+    print(f"  Removed {removed} orphaned MP3(s)")
+
+
 def main() -> None:
     """Find all FLAC files and convert them to MP3."""
-    music_dir: Path = Path.cwd()
-    # TODO: make output path customizable or at least add a timestamp to prevent
-    # overwriting the results of previous conversions
-    output_base: Path = Path("/home/chris/Music/converted")
+    parser = argparse.ArgumentParser(description="Convert FLAC files to MP3.")
+    parser.add_argument(
+        "--remove",
+        action="store_true",
+        help="Remove MP3s in the output directory that no longer have a source FLAC",
+    )
+    args = parser.parse_args()
+
+    # TODO: make input path customizable
+    music_dir: Path = Path("/media/chris/EXTREME SSD/Music/FLAC")
+    # TODO: make output path customizable
+    output_base: Path = Path("/media/chris/EXTREME SSD/Music_mp3")
 
     print(f"Scanning for FLAC files in: {music_dir}")
     print(f"Output directory: {output_base}\n")
@@ -89,6 +148,10 @@ def main() -> None:
 
     if not flac_files:
         print("No FLAC files found.")
+        if args.remove:
+            print(
+                "  --remove skipped for safety: no source files found in input directory."
+            )
         return
 
     print(f"Found {len(flac_files)} FLAC file(s) to convert\n")
@@ -96,12 +159,17 @@ def main() -> None:
     # Convert each FLAC file
     successful: int = 0
     failed: int = 0
+    skipped: int = 0
 
     for i, flac_file in enumerate(flac_files, 1):
         relative_path: Path = flac_file.relative_to(music_dir)
-        print(f"[{i}/{len(flac_files)}] Converting: {relative_path}")
+        print(f"[{i}/{len(flac_files)}] {relative_path}")
 
-        if convert_flac_to_mp3(flac_file, output_base):
+        result = convert_flac_to_mp3(flac_file, music_dir, output_base)
+        if result is None:
+            skipped += 1
+            print(f"  - Skipped (up to date)\n")
+        elif result:
             successful += 1
             print(f"  ✓ Success\n")
         else:
@@ -112,9 +180,13 @@ def main() -> None:
     print(f"\n{'='*60}")
     print(f"Conversion complete!")
     print(f"  Successful: {successful}")
-    print(f"  Failed: {failed}")
-    print(f"  Total: {len(flac_files)}")
+    print(f"  Skipped:    {skipped}")
+    print(f"  Failed:     {failed}")
+    print(f"  Total:      {len(flac_files)}")
     print(f"{'='*60}")
+
+    if args.remove:
+        remove_orphaned_mp3s(music_dir, output_base)
 
 
 if __name__ == "__main__":
