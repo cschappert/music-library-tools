@@ -47,7 +47,9 @@ def get_image_dimensions(image_path: Path) -> tuple[int, int] | None:
         width, height = result.stdout.strip().split()
         return (int(width), int(height))
     except (subprocess.CalledProcessError, ValueError) as e:
-        print(f"Warning: Could not get dimensions of {image_path}: {e}", file=sys.stderr)
+        print(
+            f"Warning: Could not get dimensions of {image_path}: {e}", file=sys.stderr
+        )
         return None
 
 
@@ -75,12 +77,15 @@ def is_baseline_jpeg(image_path: Path) -> bool:
         # If we can't determine, assume it needs processing
         return False
     except subprocess.CalledProcessError as e:
-        print(f"Warning: Could not check interlacing of {image_path}: {e}", file=sys.stderr)
+        print(
+            f"Warning: Could not check interlacing of {image_path}: {e}",
+            file=sys.stderr,
+        )
         return False
 
 
 def resize_to_baseline_jpeg(
-    input_path: Path, output_path: Path, size: int = 300
+    input_path: Path, output_path: Path, size: int = 700
 ) -> bool:
     """Resize image to baseline JPEG with specified dimensions.
 
@@ -100,7 +105,7 @@ def resize_to_baseline_jpeg(
                 "-resize",
                 f"{size}x{size}",
                 "-quality",
-                "90",
+                "95",
                 "-interlace",
                 "none",
                 str(output_path),
@@ -200,16 +205,20 @@ def process_album_directory(
             width, height = dimensions
             max_dim = max(width, height)
 
-            # If already 300x300 or smaller, check if it's baseline JPEG
-            if max_dim <= 300:
+            # If already 700x700 or smaller, check if it's baseline JPEG
+            if max_dim <= 700:
                 is_baseline = is_baseline_jpeg(extracted_path)
                 if is_baseline:
-                    print(f"  → Art is already {width}x{height} baseline JPEG, skipping album")
+                    print(
+                        f"  → Art is already {width}x{height} baseline JPEG, skipping album"
+                    )
                     return (0, len(flac_files), 0)
                 else:
-                    print(f"  → Art is {width}x{height} but progressive, will convert to baseline")
+                    print(
+                        f"  → Art is {width}x{height} but progressive, will convert to baseline"
+                    )
             else:
-                print(f"  → Art is {width}x{height}, will resize to 300x300")
+                print(f"  → Art is {width}x{height}, will resize to 700x700")
         else:
             print(f"  → Could not determine art dimensions, will process anyway")
 
@@ -219,8 +228,8 @@ def process_album_directory(
             )
             return (len(flac_files), 0, 0)
 
-        # Resize to 300x300 baseline JPEG once for the whole album
-        if not resize_to_baseline_jpeg(extracted_path, resized_path, size=300):
+        # Resize to 700x700 baseline JPEG once for the whole album
+        if not resize_to_baseline_jpeg(extracted_path, resized_path, size=700):
             print(f"  ✗ Failed to resize art")
             return (0, 0, len(flac_files))
 
@@ -245,7 +254,7 @@ def process_album_directory(
             processed += 1
 
         if processed > 0:
-            print(f"  ✓ Resized and re-embedded art (300x300) in {processed} file(s)")
+            print(f"  ✓ Resized and re-embedded art (700x700) in {processed} file(s)")
 
         return (processed, 0, errors)
 
@@ -266,7 +275,7 @@ def main() -> None:
     music_dir: Path = Path.cwd()
 
     print(f"\nScanning for FLAC files in: {music_dir}")
-    print(f"Target art size: 300x300 baseline JPEG\n")
+    print(f"Target art size: 700x700 baseline JPEG\n")
 
     # Find all FLAC files (case-insensitive)
     flac_files: list[Path] = []
@@ -308,7 +317,9 @@ def main() -> None:
         except Exception as e:
             print(f"  ✗ Error: {e}")
             # Count all files in this album as errors
-            flac_count = len(list(album_dir.glob("*.flac")) + list(album_dir.glob("*.FLAC")))
+            flac_count = len(
+                list(album_dir.glob("*.flac")) + list(album_dir.glob("*.FLAC"))
+            )
             total_errors += flac_count
 
     # Summary
@@ -342,7 +353,9 @@ def main() -> None:
                 except Exception as e:
                     print(f"  ✗ Error: {e}")
 
-            print(f"\n✓ Processed {total_processed} file(s) in {len(album_dirs)} album(s)\n")
+            print(
+                f"\n✓ Processed {total_processed} file(s) in {len(album_dirs)} album(s)\n"
+            )
 
 
 if __name__ == "__main__":
