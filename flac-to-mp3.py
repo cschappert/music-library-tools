@@ -4,6 +4,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# --- Configuration ---
+MUSIC_DIR = Path("/media/chris/EXTREME SSD/Music/FLAC")
+OUTPUT_DIR = Path("/media/chris/EXTREME SSD/Music_mp3")
+# Max pixels on the longest side for output embedded art; never upscaled
+ART_MAX_PX = 700
+# ---------------------
+
 
 def has_embedded_art(flac_path: Path) -> bool:
     result = subprocess.run(
@@ -81,8 +88,8 @@ def convert_flac_to_mp3(
     if has_embedded_art(flac_path):
         ffmpeg_cmd += [
             "-vf",
-            # Scale down to max 700px on the longest side; never upscale
-            "scale='if(gte(iw,ih),min(700,iw),-1)':'if(gt(ih,iw),min(700,ih),-1)'",
+            # Scale down to max ART_MAX_PX on the longest side; never upscale
+            f"scale='if(gte(iw,ih),min({ART_MAX_PX},iw),-1)':'if(gt(ih,iw),min({ART_MAX_PX},ih),-1)'",
             "-c:v",
             "mjpeg",
             "-q:v",
@@ -133,10 +140,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # TODO: make input path customizable
-    music_dir: Path = Path("/media/chris/EXTREME SSD/Music/FLAC")
-    # TODO: make output path customizable
-    output_base: Path = Path("/media/chris/EXTREME SSD/Music_mp3")
+    music_dir: Path = MUSIC_DIR
+    output_base: Path = OUTPUT_DIR
 
     print(f"Scanning for FLAC files in: {music_dir}")
     print(f"Output directory: {output_base}\n")
