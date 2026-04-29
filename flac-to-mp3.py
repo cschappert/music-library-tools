@@ -63,6 +63,7 @@ def convert_flac_to_mp3(
     # FFmpeg command
     ffmpeg_cmd: list[str] = [
         "ffmpeg",
+        "-y",
         "-i",
         str(flac_path),
         # Resample audio to 44100Hz using SoXR resampler
